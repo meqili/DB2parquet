@@ -30,7 +30,7 @@ input_file = args.input_file
 output_name = args.output_name
 
 # main 
-from pyspark.sql.functions import regexp_replace
+from pyspark.sql.functions import regexp_replace, col
 from pyspark.sql.types import DoubleType
 spark.read.options(inferSchema=True,sep=",",header=True,nullValue=".") \
     .csv(input_file) \
