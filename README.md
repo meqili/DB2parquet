@@ -3,5 +3,5 @@
 
 # Running command
 `spark-submit
---packages io.projectglow:glow-spark3_2.12:1.1.2 --conf spark.hadoop.io.compression.codecs=io.projectglow.sql.util.BGZFCodec --conf spark.sql.broadcastTimeout=1.6174165761721435 --driver-memory 7G --executor-memory 6G --executor-cores 6 /path/to/python_script.ext -O input_file
--I /path/to/input_file.ext`
+--packages io.projectglow:glow-spark3_2.12:1.1.2 --conf spark.hadoop.io.compression.codecs=io.projectglow.sql.util.BGZFCodec  --conf spark.sql.broadcastTimeout=2.88986851674124  --conf spark.driver.maxResultSize=3G  --driver-memory 5G  --executor-memory 7G --executor-cores 6  /path/to/python_script.ext
+ -D /path/to/input_dir  -I /path/to/input_file.ext -O output_dir_name-string-value`
