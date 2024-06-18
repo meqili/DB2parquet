@@ -2,20 +2,23 @@ import argparse
 from argparse import RawTextHelpFormatter
 import pyspark
 import glow
+from pyspark.sql.functions import col, udf, expr, concat, lit
+from pyspark.sql.types import StringType, LongType
+import re
 
+# Argument parser setup
 parser = argparse.ArgumentParser(
-    description='Script of gene based variant filtering. \n\
+    description='Script for gene-based variant filtering. \n\
     MUST BE RUN WITH spark-submit. For example: \n\
     spark-submit --driver-memory 10G Gene_based_variant_filtering.py',
     formatter_class=RawTextHelpFormatter)
 
-parser = argparse.ArgumentParser()
 parser.add_argument('-I', '--input_file', required=False,
-                    help='a text file that to be converted to a partquet file')
+                    help='A text file to be converted to a parquet file')
 parser.add_argument('-D', '--input_dir', required=False,
                     help='Directory containing files')
 parser.add_argument('-O', '--output_name', required=True,
-                    help='name of the output parquert file')
+                    help='Name of the output parquet file')
 args = parser.parse_args()
 
 # Create spark session
@@ -23,33 +26,25 @@ spark = (
     pyspark.sql.SparkSession.builder.appName("DB2parquet")
     .config('spark.sql.parquet.enableVectorizedReader', 'false')
     .getOrCreate()
-    )
-# Register so that glow functions like read vcf work with spark. Must be run in spark shell or in context described in help
+)
+
+# Register glow functions
 spark = glow.register(spark)
 
-# parameter configuration
-if args.input_file:
-    input_database = args.input_file
-else:
-    input_database = args.input_dir
+# Parameter configuration
+input_database = args.input_file if args.input_file else args.input_dir
 dir_path = args.output_name
 
+# Read input data
+# The inputs for this script is a folder that contains all file named dbNSFP4.8a_variant.chrxxxx.gz
+# dbNSFP4.8a_variant.chrM.gz is excluded 
+dbNSFP_variant = spark.read.options(inferSchema=True, sep="\t", header=True, nullValue=".") \
+    .csv(input_database)
 
-## mian 
-from pyspark.sql.functions import col, udf, expr, concat, lit
-from pyspark.sql.types import StringType
-from pyspark.sql.types import LongType
-import re
+# Replace characters in column names, and those characters are incompatible in pyspark
+cols = [re.sub(r'(^_|_$)', '', c.replace("(", "[").replace(" ", "_").replace(")", "]")) for c in dbNSFP_variant.columns]
 
-## input for dbNSFP_variant is a directory which contains all files with name like dbNSFP4.8a_variant.chrxxx.gz 
-## except file dbNSFP4.8a_variant.chrM.gz
-dbNSFP_variant = spark.read.options(inferSchema=True,sep="\t",header=True,nullValue=".") \
-            .csv(input_database)
-
-## replacing characters in column names that are not readble in pyspark
-cols=[re.sub(r'(^_|_$)','',c.replace("(", "[").replace(" ", "_").replace(")", "]")) for c in dbNSFP_variant.columns]
-
-## intial rename 
+# Rename columns
 dbNSFP_variant = dbNSFP_variant.toDF(*cols) \
     .withColumnRenamed("#chr", "chromosome") \
     .withColumn("pos[1-based]", col("pos[1-based]").cast(LongType())) \
@@ -58,25 +53,22 @@ dbNSFP_variant = dbNSFP_variant.toDF(*cols) \
     .withColumnRenamed("alt", "alternate") \
     .drop("#chr", "pos[1-based]", "ref", "alt")
 
-## intial columns to keep in the future
+# Save columns to keep in the future
 columns_to_keep = dbNSFP_variant.columns
 
-## function for all prediction scores column other than MutationTaster_pred
+# Function for general prediction scores
 def determine_prediction_scores(vep, prediction_score):
     if vep is None or prediction_score is None:
         return None
-    
+
     vep_list = vep.split(';')
     prediction_list = prediction_score.split(';')
-    
-    # Extract SIFT_pred values corresponding to YES in VEP_canonical
+
     relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
-    
-    # Count occurrences of D and T
-    damage_count = relevant_preds.count('D') + relevant_preds.count('P') + relevant_preds.count('H') + relevant_preds.count('M')
-    nondamage_count = relevant_preds.count('T') + relevant_preds.count('B') + relevant_preds.count('N') + relevant_preds.count('U') + relevant_preds.count('L')
-    
-    # Determine the value based on the counts
+
+    damage_count = sum(relevant_preds.count(x) for x in ['D', 'P', 'H', 'M'])
+    nondamage_count = sum(relevant_preds.count(x) for x in ['T', 'B', 'N', 'U', 'L'])
+
     if damage_count > nondamage_count:
         return 'Damage'
     elif nondamage_count > damage_count:
@@ -88,23 +80,20 @@ def determine_prediction_scores(vep, prediction_score):
 
 determine_prediction_scores_udf = udf(determine_prediction_scores, StringType())
 
-## since column MutationTaster_pred has conflicated values with other prediction scores. 
-## this function is specific for that
+# Function for MutationTaster_pred
+# MutationTaster_pred has prediction score that conflicts other scores
 def determine_MutationTaster_pred(vep, prediction_score):
     if vep is None or prediction_score is None:
         return None
-    
+
     vep_list = vep.split(';')
     prediction_list = prediction_score.split(';')
-    
-    # Extract SIFT_pred values corresponding to YES in VEP_canonical
+
     relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
-    
-    # Count occurrences of D and T
+
     damage_count = relevant_preds.count('D') + relevant_preds.count('A')
     nondamage_count = relevant_preds.count('N') + relevant_preds.count('P')
-    
-    # Determine the value based on the counts
+
     if damage_count > nondamage_count:
         return 'Damage'
     elif nondamage_count > damage_count:
@@ -116,37 +105,31 @@ def determine_MutationTaster_pred(vep, prediction_score):
 
 determine_MutationTaster_pred_udf = udf(determine_MutationTaster_pred, StringType())
 
-
-## generated Filtered_ columns for each prediction scores
-## skip AlphaMissense and ALoft
-prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and c != "AlphaMissense_pred" and c != "Aloft_pred" and c != "MutationTaster_pred"]
-
-# Apply the UDF to each prediction column and create a new column
+# Generate Filtered_ columns for each prediction score
+# 1. skip AlphaMissense
+# 2. skip ALoft
+prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and c not in ["AlphaMissense_pred", "Aloft_pred", "MutationTaster_pred"]]
 for col_name in prediction_columns:
     new_col_name = f"Filtered_{col_name}"
     dbNSFP_variant = dbNSFP_variant.withColumn(new_col_name, determine_prediction_scores_udf(col("VEP_canonical"), col(col_name)))
 
-dbNSFP_variant = dbNSFP_variant.withColumn("Filtered_MutationTaster_pred", determine_prediction_scores_udf(col("VEP_canonical"), col("MutationTaster_pred")))
+dbNSFP_variant = dbNSFP_variant.withColumn("Filtered_MutationTaster_pred", determine_MutationTaster_pred_udf(col("VEP_canonical"), col("MutationTaster_pred")))
 
-## count Total_NonNull_Count and Total_Damage_Count valyes
-# Properly escape column names using backticks
+# Count Total_NonNull_Count and Total_Damage_Count values
 Filtered_prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and 'Filtered_' in c]
 escaped_columns = [f"`{col}`" for col in Filtered_prediction_columns]
 
-# Create expressions to count non-null values and 'Damage' values
 non_null_expr = " + ".join([f"IF({col} IS NOT NULL, 1, 0)" for col in escaped_columns])
 damage_expr = " + ".join([f"IF({col} = 'Damage', 1, 0)" for col in escaped_columns])
 
-# Add new columns for the counts
 dbNSFP_variant = dbNSFP_variant.withColumn("Total_NonNull_Count", expr(non_null_expr)) \
-               .withColumn("Total_Damage_Count", expr(damage_expr))
+                               .withColumn("Total_Damage_Count", expr(damage_expr))
 
-
-## generated column DamagePredCount
+# Generate DamagePredCount column
 dbNSFP_variant = dbNSFP_variant.withColumn("DamagePredCount", concat(col("Total_Damage_Count"), lit("_"), col("Total_NonNull_Count")))
 
-## write dbNSFP_variant to parquet files
+# Write to parquet files
 dbNSFP_variant.select([c for c in columns_to_keep] + ["DamagePredCount"]) \
-    .write.mode("overwrite") \
-    .partitionBy("chromosome") \
-    .parquet(dir_path)
+              .write.mode("overwrite") \
+              .partitionBy("chromosome") \
+              .parquet(dir_path)
