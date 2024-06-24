@@ -93,8 +93,8 @@ def determine_MutationTaster_pred(vep, prediction_score):
     prediction_list = prediction_score.split(';')
 
     if(len(vep_list) > len(prediction_list)):
-        damage_count = relevant_preds.count('D') + relevant_preds.count('A')
-        nondamage_count = relevant_preds.count('N') + relevant_preds.count('P')
+        damage_count = prediction_list.count('D') + prediction_list.count('A')
+        nondamage_count = prediction_list.count('N') + prediction_list.count('P')
     else:
         relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
         damage_count = relevant_preds.count('D') + relevant_preds.count('A')
