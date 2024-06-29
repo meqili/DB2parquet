@@ -10,29 +10,30 @@ parser = argparse.ArgumentParser(
     formatter_class=RawTextHelpFormatter)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-I', '--input_file', required=True,
-                    help='a text file that to be converted to a partquet file')
+parser.add_argument('-I', '--input_file', required=False,
+                    help='A text file to be converted to a parquet file')
+parser.add_argument('-D', '--input_dir', required=False,
+                    help='Directory containing files')
 parser.add_argument('-O', '--output_name', required=True,
-                    help='name of the output parquert file')
+                    help='Name of the output parquet file')
 args = parser.parse_args()
 
 # Create spark session
 spark = (
     pyspark.sql.SparkSession.builder.appName("DB2parquet")
+    .config('spark.sql.parquet.enableVectorizedReader', 'false')
     .getOrCreate()
-    )
+)
 # Register so that glow functions like read vcf work with spark. Must be run in spark shell or in context described in help
 spark = glow.register(spark)
 
-# parameter configuration
-input_file = args.input_file
-
-# Define the path to the directory containing the files
+# Parameter configuration
+input_database = args.input_file if args.input_file else args.input_dir
 dir_path = args.output_name
 
 # Read all TSV files in the directory into a DataFrame
 dbNSFP_gene = spark.read.options(inferSchema=True,sep="\t",header=True, nullValue=".") \
-    .csv(args.input_file) \
+    .csv(input_database) \
     .withColumnRenamed("chr", "chromosome") \
     .drop("chr")
 

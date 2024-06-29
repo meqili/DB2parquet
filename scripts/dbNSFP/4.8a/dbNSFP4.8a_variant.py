@@ -65,12 +65,12 @@ def determine_prediction_scores(vep, prediction_score):
     prediction_list = prediction_score.split(';')
 
     if(len(vep_list) > len(prediction_list)):
-        damage_count = sum(prediction_list.count(x) for x in ['D', 'P', 'H', 'M'])
-        nondamage_count = sum(prediction_list.count(x) for x in ['T', 'B', 'N', 'U', 'L'])
+        damage_count = sum(prediction_list.count(x) for x in ['D', 'P', 'H', 'M', 'U'])
+        nondamage_count = sum(prediction_list.count(x) for x in ['T', 'B', 'N', 'L', 'A'])
     else:
         relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
-        damage_count = sum(relevant_preds.count(x) for x in ['D', 'P', 'H', 'M'])
-        nondamage_count = sum(relevant_preds.count(x) for x in ['T', 'B', 'N', 'U', 'L'])
+        damage_count = sum(relevant_preds.count(x) for x in ['D', 'P', 'H', 'M', 'U'])
+        nondamage_count = sum(relevant_preds.count(x) for x in ['T', 'B', 'N', 'L', 'A'])
 
     if damage_count > nondamage_count:
         return 'Damage'
@@ -83,22 +83,19 @@ def determine_prediction_scores(vep, prediction_score):
 
 determine_prediction_scores_udf = udf(determine_prediction_scores, StringType())
 
-# Function for MutationTaster_pred
-# MutationTaster_pred has prediction score that conflicts other scores
-def determine_MutationTaster_pred(vep, prediction_score):
+# Function for Aloft_pred
+# Aloft_pred has prediction score that conflicts other scores
+def determine_Aloft_pred(vep, prediction_score):
     if vep is None or prediction_score is None:
         return None
 
     vep_list = vep.split(';')
     prediction_list = prediction_score.split(';')
 
-    if(len(vep_list) > len(prediction_list)):
-        damage_count = prediction_list.count('D') + prediction_list.count('A')
-        nondamage_count = prediction_list.count('N') + prediction_list.count('P')
-    else:
-        relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
-        damage_count = relevant_preds.count('D') + relevant_preds.count('A')
-        nondamage_count = relevant_preds.count('N') + relevant_preds.count('P')
+    relevant_preds = [s for v, s in zip(vep_list, prediction_list) if v == 'YES']
+    
+    damage_count = sum(1 for x in relevant_preds if 'Dominant' in x or 'Recessive' in x)
+    nondamage_count = sum(1 for x in relevant_preds if 'Tolerant' in x and "|" not in x)
 
     if damage_count > nondamage_count:
         return 'Damage'
@@ -109,17 +106,17 @@ def determine_MutationTaster_pred(vep, prediction_score):
     else:
         return None
 
-determine_MutationTaster_pred_udf = udf(determine_MutationTaster_pred, StringType())
+determine_Aloft_pred_udf = udf(determine_Aloft_pred, StringType())
 
 # Generate Filtered_ columns for each prediction score
-# 1. skip AlphaMissense
-# 2. skip ALoft
-prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and c not in ["AlphaMissense_pred", "Aloft_pred", "MutationTaster_pred"]]
+# 1. skip MutationTaster_pred
+# And Aloft_pred has its own function
+prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and c not in ["MutationTaster_pred", "Aloft_pred"]]
 for col_name in prediction_columns:
     new_col_name = f"Filtered_{col_name}"
     dbNSFP_variant = dbNSFP_variant.withColumn(new_col_name, determine_prediction_scores_udf(col("VEP_canonical"), col(col_name)))
 
-dbNSFP_variant = dbNSFP_variant.withColumn("Filtered_MutationTaster_pred", determine_MutationTaster_pred_udf(col("VEP_canonical"), col("MutationTaster_pred")))
+dbNSFP_variant = dbNSFP_variant.withColumn("Filtered_Aloft_pred", determine_Aloft_pred_udf(col("VEP_canonical"), col("Aloft_pred")))
 
 # Count Total_NonNull_Count and Total_Damage_Count values
 Filtered_prediction_columns = [c for c in dbNSFP_variant.columns if '_pred' in c and 'Filtered_' in c]
