@@ -51,6 +51,7 @@ dbNSFP_variant = dbNSFP_variant.toDF(*cols) \
     .withColumnRenamed("pos[1-based]", "start") \
     .withColumnRenamed("ref", "reference") \
     .withColumnRenamed("alt", "alternate") \
+    .filter(col("VEP_canonical").isNotNull() & col("VEP_canonical").contains("YES")) \
     .drop("#chr", "pos[1-based]", "ref", "alt")
 
 # Save columns to keep in the future
