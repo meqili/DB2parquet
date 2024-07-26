@@ -23,8 +23,11 @@ inputs:
   type: string
   inputBinding:
     prefix: --hgmd_version
-    position: 5
+    position: 3
     shellQuote: false
+- id: tar_ouput
+  type: boolean
+  doc: "if you want to generate tar.gz files for HGMD database"
 - id: spark_driver_mem
   type: int?
   default: 20
@@ -40,7 +43,6 @@ inputs:
 - id: driver_maxresultsize
   type: int?
   default: 10
-
 
 outputs:
 - id: gene_lite_output
@@ -58,10 +60,19 @@ outputs:
   outputBinding:
     glob: "*variant"
     loadListing: deep_listing
+- id: tarred_gene_sorted_output
+  type: Directory
+  outputBinding:
+    glob: "*gene_sorted.tar.gz"
+- id: tarred_variant_output
+  type: Directory
+  outputBinding:
+    glob: "*variant.tar.gz"
 
 baseCommand:
 - tar
 - -xvf
+
 arguments:
 - position: 1
   valueFrom: |-
@@ -76,4 +87,8 @@ arguments:
     --driver-memory $(inputs.spark_driver_mem)G  \
     --executor-memory $(inputs.spark_executor_mem)G --executor-cores $(inputs.executor_cores) \
     HGMD_DB2parquet.py
+  shellQuote: false
+- position: 10
+  valueFrom: >
+    ${ return inputs.tar_ouput ? '&& tar -czvf hg38_' + inputs.hgmd_version + '_variant.tar.gz hg38_' + inputs.hgmd_version + '_variant && tar -czvf hg38_' + inputs.hgmd_version + '_gene_sorted.tar.gz hg38_' + inputs.hgmd_version + '_gene_sorted' : ''; }
   shellQuote: false
