@@ -28,7 +28,7 @@ spark = (
 spark = glow.register(spark)
 
 # parameter configuration
-inputs = args.input_file
+input_database = args.input_file if args.input_file else args.input_dir
 output_name = args.output_name
 
 # main 
@@ -36,7 +36,7 @@ import csv
 
 output_file = output_name + ".tsv"
 
-with open(inputs, 'r', newline='', encoding='utf-8') as infile, \
+with open(input_database, 'r', newline='', encoding='utf-8') as infile, \
      open(output_file, 'w', newline='', encoding='utf-8') as outfile:
     reader = csv.reader(infile, delimiter='\t', quotechar='"', quoting=csv.QUOTE_ALL)
     writer = csv.writer(outfile, delimiter='\t', quotechar='"', quoting=csv.QUOTE_ALL)
