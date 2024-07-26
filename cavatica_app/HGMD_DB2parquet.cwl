@@ -18,7 +18,7 @@ requirements:
 
 inputs:
 - id: input_tarred_hgmd_file
-  type: File?
+  type: File
 - id: hgmd_version
   type: string
   inputBinding:
