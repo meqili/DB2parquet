@@ -32,9 +32,13 @@ input_database = args.input_file if args.input_file else args.input_dir
 output_name = args.output_name
 
 # main 
+from pyspark.sql.functions import col
+from pyspark.sql.types import LongType
 spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .csv(input_database) \
     .withColumnRenamed("CHROMOSOME", "chromosome") \
+    .withColumn("start", col("GENOME_START").cast(LongType())) \
+    .withColumn("end", col("GENOME_STOP").cast(LongType())) \
     .coalesce(1) \
     .write.mode("overwrite") \
     .parquet(output_name)
