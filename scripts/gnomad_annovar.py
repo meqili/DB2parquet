@@ -28,14 +28,14 @@ spark = (
 spark = glow.register(spark)
 
 # parameter configuration
-inputs = args.input_file
+input_database = args.input_file if args.input_file else args.input_dir
 output_name = args.output_name
 
 # main 
 from pyspark.sql.functions import col, regexp_replace
 from pyspark.sql.types import LongType, StringType
 spark.read.options(inferSchema=True,sep="\t",header=True,nullValue=".") \
-    .csv(inputs) \
+    .csv(input_database) \
     .withColumnRenamed("#Chr", "chromosome") \
     .withColumn("chromosome", regexp_replace("chromosome", "chr", "")) \
     .withColumn("start", col("Start").cast(LongType())) \
