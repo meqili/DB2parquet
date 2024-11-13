@@ -2,7 +2,6 @@ import argparse
 from argparse import RawTextHelpFormatter
 import pyspark
 import glow
-import os
 
 parser = argparse.ArgumentParser(
     description='Script of gene based variant filtering. \n\
