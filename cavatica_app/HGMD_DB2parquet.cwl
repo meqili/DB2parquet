@@ -61,11 +61,11 @@ outputs:
     glob: "*variant"
     loadListing: deep_listing
 - id: tarred_gene_sorted_output
-  type: Directory
+  type: File
   outputBinding:
     glob: "*gene_sorted.tar.gz"
 - id: tarred_variant_output
-  type: Directory
+  type: File
   outputBinding:
     glob: "*variant.tar.gz"
 
