@@ -32,6 +32,9 @@ inputs:
     prefix: -O
     position: 1
     shellQuote: false
+- id: tar_ouput
+  type: boolean
+  doc: "if you want to generate tar.gz files for this database"
 - id: spark_driver_mem
   type: int?
   default: 20
@@ -51,10 +54,14 @@ inputs:
 
 outputs:
 - id: output
-  type: Directory?
+  type: Directory
   outputBinding:
     glob: $(inputs.output_dir_name)
     loadListing: deep_listing
+- id: tarred_database
+  type: File
+  outputBinding:
+    glob: "*tar.gz"
 
 baseCommand:
 - spark-submit
@@ -68,4 +75,8 @@ arguments:
     --driver-memory $(inputs.spark_driver_mem)G  \
     --executor-memory $(inputs.spark_executor_mem)G --executor-cores $(inputs.executor_cores) \
     $(inputs.python_script.path)
+  shellQuote: false
+- position: 10
+  valueFrom: >
+    ${ return inputs.tar_ouput ? '&& tar -czvf ' + inputs.output_dir_name + '.tar.gz ' + inputs.output_dir_name : ''; }
   shellQuote: false
