@@ -47,8 +47,9 @@ spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .withColumn("alternate", col("reference").cast(StringType())) \
     .withColumnRenamed("CLINVAR_CLNDN", "conditions") \
     .withColumnRenamed("ClinVar_Variation_ID", "VariationID") \
+    .withColumnRenamed("CLINVAR_GENEINFO", "geneinfo") \
     .withColumn("clin_sig", split("CLINVAR_CLNSIG", "\|")) \
-    .select('chromosome', 'start', 'reference', 'alternate', 'VariationID', 'clin_sig', 'conditions') \
+    .select('chromosome', 'start', 'reference', 'alternate', 'VariationID', 'clin_sig', 'conditions', 'geneinfo') \
     .coalesce(1) \
     .write.mode("overwrite") \
     .parquet(dir_path)
