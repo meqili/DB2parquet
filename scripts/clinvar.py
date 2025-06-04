@@ -44,7 +44,7 @@ spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .filter(col("chromosome").isin(allowed_chromosomes)) \
     .withColumn("start", col("start").cast(LongType())) \
     .withColumn("reference", col("reference").cast(StringType())) \
-    .withColumn("alternate", col("reference").cast(StringType())) \
+    .withColumn("alternate", col("alternate").cast(StringType())) \
     .withColumnRenamed("CLINVAR_CLNDN", "conditions") \
     .withColumnRenamed("ClinVar_Variation_ID", "VariationID") \
     .withColumnRenamed("CLINVAR_GENEINFO", "geneinfo") \
