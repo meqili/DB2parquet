@@ -2,43 +2,70 @@ import argparse
 from argparse import RawTextHelpFormatter
 import pyspark
 import glow
-import os
+import re
+from pyspark.sql.functions import when, col
 
+# Define argument parser
 parser = argparse.ArgumentParser(
-    description='Script of gene based variant filtering. \n\
-    MUST BE RUN WITH spark-submit. For example: \n\
-    spark-submit --driver-memory 10G Gene_based_variant_filtering.py',
+    description='This version of DB2parquet keeps the original formats of databases',
     formatter_class=RawTextHelpFormatter)
 
-parser = argparse.ArgumentParser()
 parser.add_argument('-I', '--input_file', required=False,
-                    help='a text file that to be converted to a partquet file')
+                    help='A text file to be converted to a Parquet file')
 parser.add_argument('-D', '--input_dir', required=False,
-                    help='a directory that conatins text files to be converted to partquet files')
+                    help='A directory containing text files to be converted to Parquet files')
 parser.add_argument('-O', '--output_name', required=True,
-                    help='name of the output parquert file')
+                    help='Name of the output Parquet file')
+parser.add_argument('-S', '--field_separator', required=False, default='comma',
+                    help='Field separator: options are "comma", "tab", or provide a single character like ";" or "|"')
+
 args = parser.parse_args()
 
-# Create spark session
+# Determine actual separator character
+separator_map = {
+    'comma': ',',
+    'tab': '\t',
+    'semicolon': ';',
+    'pipe': '|'
+}
+sep = separator_map.get(args.field_separator.lower(), args.field_separator)
+
+# Create Spark session
 spark = (
     pyspark.sql.SparkSession.builder.appName("DB2parquet")
     .getOrCreate()
-    )
-# Register so that glow functions like read vcf work with spark. Must be run in spark shell or in context described in help
+)
+# Register Glow
 spark = glow.register(spark)
 
-# parameter configuration
+# Select input path
 input_database = args.input_file if args.input_file else args.input_dir
 output_name = args.output_name
 
-# main 
-from pyspark.sql.functions import col
-from pyspark.sql.types import LongType
-spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
-    .csv(input_database) \
-    .withColumnRenamed("CHROMOSOME", "chromosome") \
-    .withColumn("start", col("GENOME_START").cast(LongType())) \
-    .withColumn("end", col("GENOME_STOP").cast(LongType())) \
-    .coalesce(1) \
-    .write.mode("overwrite") \
-    .parquet(output_name)
+cgc_df = spark.read.options(inferSchema=True, sep=sep, header=True, nullValue="") \
+    .csv(input_database) 
+cgc_df = cgc_df.withColumn(
+    "Entrez GeneId",
+    when((col("Gene Symbol") == "HMGN2P46") & col("Entrez GeneId").isNull(), 283651)
+    .when((col("Gene Symbol") == "MALAT1") & col("Entrez GeneId").isNull(), 378938)
+    .when((col("Gene Symbol") == "MDS2") & col("Entrez GeneId").isNull(), 259283)
+    .otherwise(col("Entrez GeneId"))
+)
+
+# Get a list of current column names
+current_cols = cgc_df.columns
+
+# Define a function to replace symbols with underscores
+def clean_col_name(col_name):
+    return re.sub('[ ,;{}()\n\t=]+', '_', col_name)
+
+# Use list comprehension to create a list of new column names with symbols replaced by underscores
+new_cols = [clean_col_name(col_name) for col_name in current_cols]
+
+# Rename the columns using withColumnRenamed()
+for i in range(len(current_cols)):
+    cgc_df = cgc_df.withColumnRenamed(current_cols[i], new_cols[i])
+
+cgc_df.coalesce(1) \
+     .write.mode("overwrite") \
+     .parquet(output_name)
