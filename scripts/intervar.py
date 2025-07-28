@@ -47,7 +47,7 @@ spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .withColumn("end", col("End").cast(LongType())) \
     .withColumn("reference", col("Ref").cast(StringType())) \
     .withColumn("alternate", col("Alt").cast(StringType())) \
-    .drop('#Chr', 'Start', 'End', 'Ref', 'Alt') \
+    .drop('#Chr', 'Ref', 'Alt') \
     .coalesce(1) \
     .write.mode("overwrite") \
     .parquet(dir_path)
