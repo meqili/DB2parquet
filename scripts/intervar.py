@@ -39,7 +39,7 @@ dir_path = args.output_name
 allowed_chromosomes = [str(i) for i in range(1, 23)] + ["X", "Y"]
 
 # main
-spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
+db = spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .csv(input_database) \
     .withColumnRenamed('#Chr', 'chromosome') \
     .filter(col("chromosome").isin(allowed_chromosomes)) \
@@ -47,7 +47,14 @@ spark.read.options(inferSchema=True,sep="\t",header=True,nullValue="") \
     .withColumn("end", col("End").cast(LongType())) \
     .withColumn("reference", col("Ref").cast(StringType())) \
     .withColumn("alternate", col("Alt").cast(StringType())) \
-    .drop('#Chr', 'Ref', 'Alt') \
-    .coalesce(1) \
+    .drop('#Chr', 'Ref', 'Alt')
+
+db.coalesce(1) \
     .write.mode("overwrite") \
     .parquet(dir_path)
+
+print("\n=== SCHEMA ===")
+db.printSchema()
+
+print("\n=== FIRST 2 ROWS ===")
+db.show(2, truncate=False)
